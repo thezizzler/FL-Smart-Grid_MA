@@ -32,6 +32,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
+# helper function to save the results of the experiments
 def get_history_to_dataframe(h):
         lc = pd.DataFrame(h.losses_centralized).astype(float)
         ld = pd.DataFrame(h.losses_distributed).astype(float)
@@ -40,6 +41,7 @@ def get_history_to_dataframe(h):
 
         return lc, ld, mc, md
 
+# helper function for loading the data
 def get_file_path_dict(root_dir: str)-> Dict:
     """Returns a dictionary with the file paths for each site"""
     file_paths = {}
@@ -55,7 +57,7 @@ def get_building_ids(root_dir: str, site: str):
     site_dir = os.path.join(root_dir, f'site_{site}')
     site_files = [os.path.join(site_dir, file) for file in os.listdir(site_dir)]
     return site_files
-
+# global experiment variables
 N_ROUNDS = 50
 ROOT_PATH = '/home/azureuser/masterarbeit/ready_datasets_dummy/'
 RESULTS_PATH = '/home/azureuser/masterarbeit/hierarchical_FL/results/'
@@ -76,6 +78,7 @@ site_fraction_fits = {i:round(x,2) for i,x in zip(DICT.keys(), (normalized_numbe
 site_fraction_fits = {int(k.replace("site_","")):v for k,v in site_fraction_fits.items()}"""
 site_fraction_fits = {"0": 0.34, "1": 0.37, "2": 0.33, "3": 0.32, "4": 0.35, "5": 0.34, "6": 0.39, "7": 0.54, "8": 0.35, "9": 0.34, "10": 0.43, "11": 1.0, "12": 0.39, "13": 0.33, "14": 0.34, "15": 0.34}
 
+# helper function for splitting the data into batches
 def split_sequences_batch_wise(batch_data, n_steps):
     input_data = []
     output_data = []
@@ -93,7 +96,7 @@ def split_sequences_batch_wise(batch_data, n_steps):
         output_data.append(seq_y)
     return np.array(input_data), np.array(output_data)
 
-
+# Custom Keras-Data Loader; loads the data from a csv file batchwise and transforms it into supervised learning data (lookback of 3 hours, predict next hour)
 class CSVDataGenerator(tf.keras.utils.Sequence):
     def __init__(self, csv_path, batch_size, split_sequences):
         self.csv_path = csv_path
@@ -118,11 +121,13 @@ class CSVDataGenerator(tf.keras.utils.Sequence):
         return self.split_sequences(batch_data, 3)
 
 """GLOBAL HELPER FUNCTIONS"""
+# instantiates the data generator for the client
 def get_data_generator(cid, sid, type):
     path = get_building_ids(ROOT_PATH, int(sid))[int(cid)]+f'/{type}.csv'
     #path = f'{ROOT_PATH}site_{int(sid)}/building_{cid}/{type}.csv'
     return CSVDataGenerator(path, 128, split_sequences_batch_wise)
 
+# instatiates the data generator for the server
 def get_data_generator_server():
     # path to centralized testset
     path = f'/home/azureuser/masterarbeit/server_testset.csv'
@@ -298,8 +303,9 @@ def sum_weights(weights):
 
     return total_sum
 
-# ChatGPTs version
-arr = [1, 2, 3, 4, 5]
+# Setup the multiprocessing environment
+# a process will have its own Federated Learning Server and Client (called edge server or es)
+# and one extra process for the simulation of the central server (cs = central server)
 class Worker:
     def __init__(self):
         # Create pipes for communication between processes
@@ -307,7 +313,6 @@ class Worker:
         self.cs2, self.es2 = Pipe()
         self.cs3, self.es3 = Pipe()
         self.cs4, self.es4 = Pipe()
-        # create pipes until we reach 13 Pipes
         self.cs5, self.es5 = Pipe()
         self.cs6, self.es6 = Pipe()
         self.cs7, self.es7 = Pipe()
@@ -334,7 +339,7 @@ class Worker:
         self.p12 = Process(target=self.edge_server12, args=(self.es12,))
         self.p13 = Process(target=self.edge_server13, args=(self.es13,))
 
-
+# define what the central server does
     def central_server(self, conn1, conn2, conn3, conn4, conn5, conn6, conn7, conn8, conn9, conn10, conn11, conn12, conn13):
         connections = [conn1, conn2, conn3, conn4, conn5, conn6, conn7, conn8, conn9, conn10, conn11, conn12, conn13]
         # Initialize array
@@ -1538,11 +1543,7 @@ class Worker:
 
 
         
-
-       
-
-
-        
+# define what the edge_server does; this part is redundant for each edge_server (except for SITE_ID variable)        
 
     def edge_server1(self, conn2):
         SITE_ID = 15
